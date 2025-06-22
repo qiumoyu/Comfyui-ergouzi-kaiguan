@@ -2,6 +2,7 @@
 哈喽！我是二狗子（2🐕）！这是一套针对Comfyui流程设计师及玩家的混合组开关套件，一键实现控制不同组别的忽略禁用   
 Hello! I am Er Gouzi （2🐕）！ This is a mixed group switch kit designed for Comfyui process designers and players, which allows for one click control of ignoring and disabling different groups
 
+## 🐕图标可通过鼠标滚轮（中键）随时拖动！！！🐕The icon can be dragged at any time with the mouse wheel (middle button)！！！
 ## 安装
 Installation
 
