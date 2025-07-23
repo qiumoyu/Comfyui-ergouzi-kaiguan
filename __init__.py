@@ -19,11 +19,12 @@ def load_nodes():
                 if hasattr(module, "NODE_DISPLAY_NAME_MAPPINGS"):
                     NODE_DISPLAY_NAME_MAPPINGS.update(module.NODE_DISPLAY_NAME_MAPPINGS)
                     
-                # 特别输出全局条件控制节点的加载信息
+                # 特别输出全局组条件控制节点的加载信息
                 if module_name == "kaiguan_global_condition":
-                    print("🌐 全局条件控制节点已成功加载！")
-                    print("   - 全局条件控制🌐🔀")
-                    print("   - 条件组控制🎯")
+                    print("🌐 全局组条件控制节点已成功加载！")
+                    print("   - 全局组条件控制🌐🔀 (智能条件判断+组控制)")
+                    print("   - 智能组开关🎯 (简化组开关控制)")
+                    print("   支持ComfyUI节点组的启用/禁用/屏蔽状态控制")
                     
             except Exception as e:
                 print(f"Error loading module {module_name}: {e}")

@@ -21,6 +21,16 @@ Next, clone the ergouzi kaiguan repository:
 ## 更新日志    
 Update log    
 
+🌐 **2025/1/2 新增全局组条件控制节点**     
+2025/1/2 Added Global Group Condition Control Node    
+根据条件判断自动控制ComfyUI节点组的开关状态（启用/禁用/屏蔽）    
+Automatically control the on/off status of ComfyUI node groups based on conditional judgment (enable/disable/bypass)    
+
+• 全局组条件控制🌐🔀 - 智能条件判断+组控制    
+• 智能组开关🎯 - 简化的组开关控制    
+• 支持8种比较类型和复杂条件逻辑    
+• 可视化控制面板和状态管理    
+
 2025/2/20修正连线组开关ture为启用/flase为禁用     
 On May 2, 2023, the wiring group switch 'ture' was enabled and 'flash' was disabled    
 2024/12/09新增桌宠编辑器    
