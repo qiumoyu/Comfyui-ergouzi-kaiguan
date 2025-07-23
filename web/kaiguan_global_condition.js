@@ -156,14 +156,50 @@ class GroupControlManager {
 // 全局管理器实例
 const groupManager = new GroupControlManager();
 
-// 解析目标组列表
+// 解析目标组列表 - 支持多种分割方式
 function parseTargetGroups(groupsText) {
     if (!groupsText || !groupsText.trim()) {
         return [];
     }
-    return groupsText.split('\n')
-        .map(group => group.trim())
-        .filter(group => group.length > 0);
+    
+    const groups = [];
+    const lines = groupsText.split('\n');
+    
+    for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (!trimmedLine) continue;
+        
+        // 检查分割符并解析
+        if (trimmedLine.includes(',')) {
+            // 逗号分割
+            const parts = trimmedLine.split(',').map(p => p.trim()).filter(p => p);
+            groups.push(...parts);
+        } else if (trimmedLine.includes(';')) {
+            // 分号分割
+            const parts = trimmedLine.split(';').map(p => p.trim()).filter(p => p);
+            groups.push(...parts);
+        } else if (trimmedLine.includes('|')) {
+            // 竖线分割
+            const parts = trimmedLine.split('|').map(p => p.trim()).filter(p => p);
+            groups.push(...parts);
+        } else if (trimmedLine.includes(' ') && trimmedLine.split(' ').length > 1) {
+            // 空格分割（但要注意组名本身可能包含空格）
+            const words = trimmedLine.split(/\s+/).filter(w => w);
+            if (words.length > 1 && words.every(w => w.length > 2)) {
+                // 可能是多个组名
+                groups.push(...words);
+            } else {
+                // 可能是一个包含空格的组名
+                groups.push(trimmedLine);
+            }
+        } else {
+            // 单个组名
+            groups.push(trimmedLine);
+        }
+    }
+    
+    // 去重并保持顺序
+    return [...new Set(groups.filter(g => g.length > 0))];
 }
 
 // 处理组条件控制节点的执行

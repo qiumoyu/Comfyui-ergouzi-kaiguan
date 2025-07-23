@@ -392,7 +392,7 @@ class FlowBypassGroupNode:
         return {
             "required": {
                 "flow_input": (any_type,),  # 接收流程输入
-                "groups_to_bypass": ("STRING", {"multiline": True, "placeholder": "要屏蔽的组名\n每行一个组名"}),
+                "groups_to_bypass": ("STRING", {"multiline": True, "placeholder": "要屏蔽的组名，支持多种分割方式：\n• 换行：组1\\n组2\n• 逗号：组1,组2\n• 分号：组1;组2\n• 竖线：组1|组2\n• 空格：组1 组2\n• 混合：自动识别"}),
             },
             "optional": {},
         }
@@ -407,19 +407,83 @@ class FlowBypassGroupNode:
         核心功能：屏蔽指定组，然后传递流程数据
         """
         
-        # 解析要屏蔽的组名
-        groups_list = []
-        if groups_to_bypass and groups_to_bypass.strip():
-            groups_list = [group.strip() for group in groups_to_bypass.split('\n') if group.strip()]
+        # 解析要屏蔽的组名，支持多种分割方式
+        groups_list = self._parse_groups_flexible(groups_to_bypass)
         
         # 输出调试信息
         if groups_list:
             print(f"🚫 流程屏蔽组: {', '.join(groups_list)}")
+            print(f"   共屏蔽 {len(groups_list)} 个组")
         else:
             print("🚫 流程屏蔽组: 未指定组名，跳过屏蔽")
         
         # 直接传递流程输入到输出
         return (flow_input,)
+    
+    def _parse_groups_flexible(self, groups_input):
+        """
+        灵活解析组名，支持多种分割方式：
+        - 换行分割: group1\ngroup2
+        - 逗号分割: group1,group2
+        - 分号分割: group1;group2
+        - 竖线分割: group1|group2
+        - 空格分割: group1 group2 (多个连续空格视为一个分割符)
+        - 混合分割: 自动识别并处理
+        """
+        
+        if not groups_input or not groups_input.strip():
+            return []
+        
+        groups_text = groups_input.strip()
+        groups_list = []
+        
+        # 1. 首先按换行分割
+        lines = groups_text.split('\n')
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            
+            # 2. 检查该行是否包含其他分割符
+            if ',' in line:
+                # 逗号分割
+                parts = [part.strip() for part in line.split(',') if part.strip()]
+                groups_list.extend(parts)
+            elif ';' in line:
+                # 分号分割
+                parts = [part.strip() for part in line.split(';') if part.strip()]
+                groups_list.extend(parts)
+            elif '|' in line:
+                # 竖线分割
+                parts = [part.strip() for part in line.split('|') if part.strip()]
+                groups_list.extend(parts)
+            elif ' ' in line and len(line.split()) > 1:
+                # 空格分割（多个词的情况）
+                # 但要排除单个组名中间有空格的情况
+                words = line.split()
+                if len(words) > 1:
+                    # 检查是否看起来像多个组名
+                    if any(len(word) > 2 for word in words):  # 每个词长度大于2，可能是组名
+                        groups_list.extend([word.strip() for word in words if word.strip()])
+                    else:
+                        # 可能是一个组名，保持原样
+                        groups_list.append(line)
+                else:
+                    groups_list.append(line)
+            else:
+                # 单个组名
+                groups_list.append(line)
+        
+        # 3. 去重并保持顺序
+        seen = set()
+        unique_groups = []
+        for group in groups_list:
+            if group and group not in seen:
+                seen.add(group)
+                unique_groups.append(group)
+        
+        return unique_groups
 
 
 NODE_CLASS_MAPPINGS = {
