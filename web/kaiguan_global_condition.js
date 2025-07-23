@@ -251,6 +251,34 @@ function handleSmartGroupSwitch(node) {
     groupManager.executeGroupControl(action, targetGroups);
 }
 
+// 处理流程屏蔽组节点
+function handleFlowBypassGroup(node) {
+    const widgets = node.widgets;
+    if (!widgets) return;
+    
+    const groupsToBypass = widgets.find(w => w.name === "groups_to_bypass")?.value ?? "";
+    
+    // 解析要屏蔽的组名
+    const targetGroups = parseTargetGroups(groupsToBypass);
+    
+    if (targetGroups.length === 0) {
+        console.log('🚫 流程屏蔽组: 未指定组名，跳过屏蔽');
+        return;
+    }
+    
+    // 注册控制器
+    groupManager.registerController(node.id, {
+        action: "屏蔽组",
+        targetGroups: targetGroups,
+        nodeType: "FlowBypass"
+    });
+    
+    // 执行屏蔽操作
+    groupManager.executeGroupControl("屏蔽组", targetGroups);
+    
+    console.log(`🚫 流程屏蔽组执行: ${targetGroups.join(', ')}`);
+}
+
 // 处理高级组开关节点
 function handleAdvancedGroupSwitch(node) {
     const widgets = node.widgets;
@@ -466,7 +494,8 @@ LGraphCanvas.prototype.getNodeMenuOptions = function(node) {
     
     if (node.type === "GlobalGroupConditionNode" || 
         node.type === "SmartGroupSwitchNode" || 
-        node.type === "AdvancedGroupSwitchNode") {
+        node.type === "AdvancedGroupSwitchNode" ||
+        node.type === "FlowBypassGroupNode") {
         
         options.push(null); // 分割线
         
@@ -484,6 +513,8 @@ LGraphCanvas.prototype.getNodeMenuOptions = function(node) {
                     handleSmartGroupSwitch(node);
                 } else if (node.type === "AdvancedGroupSwitchNode") {
                     handleAdvancedGroupSwitch(node);
+                } else if (node.type === "FlowBypassGroupNode") {
+                    handleFlowBypassGroup(node);
                 }
             }
         });
@@ -590,6 +621,42 @@ app.registerExtension({
                 groupManager.unregisterController(this.id);
             };
         }
+        
+        // 流程屏蔽组节点
+        if (nodeData.name === "FlowBypassGroupNode") {
+            
+            nodeType.prototype.onNodeCreated = function() {
+                // 监听widget变化
+                setTimeout(() => {
+                    this.widgets?.forEach(widget => {
+                        const originalCallback = widget.callback;
+                        widget.callback = (value) => {
+                            if (originalCallback) originalCallback(value);
+                            
+                            setTimeout(() => {
+                                handleFlowBypassGroup(this);
+                            }, 50);
+                        };
+                    });
+                }, 100);
+            };
+            
+            // 重要：监听节点执行，在节点被执行时触发屏蔽
+            const originalExecute = nodeType.prototype.execute;
+            nodeType.prototype.execute = function(flow_input, groups_to_bypass) {
+                // 先执行原始逻辑
+                const result = originalExecute ? originalExecute.apply(this, arguments) : [flow_input];
+                
+                // 然后执行屏蔽逻辑
+                handleFlowBypassGroup(this);
+                
+                return result;
+            };
+            
+            nodeType.prototype.onRemoved = function() {
+                groupManager.unregisterController(this.id);
+            };
+        }
     }
 });
 
@@ -610,4 +677,5 @@ console.log("   支持功能:");
 console.log("   • 条件判断自动控制组开关");
 console.log("   • 组状态管理（启用/禁用/屏蔽）"); 
 console.log("   • 智能组开关控制");
+console.log("   • 流程屏蔽组控制（原子功能）");
 console.log("   • 可视化控制面板"); 

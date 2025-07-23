@@ -379,14 +379,59 @@ class AdvancedGroupSwitchNode:
         return []
 
 
+class FlowBypassGroupNode:
+    """
+    流程屏蔽组节点：接收流程输入，屏蔽指定的组
+    这是一个原子功能节点，专门用于在流程中屏蔽组
+    """
+    def __init__(self):
+        pass
+    
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "flow_input": (any_type,),  # 接收流程输入
+                "groups_to_bypass": ("STRING", {"multiline": True, "placeholder": "要屏蔽的组名\n每行一个组名"}),
+            },
+            "optional": {},
+        }
+
+    RETURN_TYPES = (any_type,)
+    RETURN_NAMES = ("输出",)
+    FUNCTION = "execute"
+    CATEGORY = "2🐕kaiguan"
+
+    def execute(self, flow_input, groups_to_bypass):
+        """
+        核心功能：屏蔽指定组，然后传递流程数据
+        """
+        
+        # 解析要屏蔽的组名
+        groups_list = []
+        if groups_to_bypass and groups_to_bypass.strip():
+            groups_list = [group.strip() for group in groups_to_bypass.split('\n') if group.strip()]
+        
+        # 输出调试信息
+        if groups_list:
+            print(f"🚫 流程屏蔽组: {', '.join(groups_list)}")
+        else:
+            print("🚫 流程屏蔽组: 未指定组名，跳过屏蔽")
+        
+        # 直接传递流程输入到输出
+        return (flow_input,)
+
+
 NODE_CLASS_MAPPINGS = {
     "GlobalGroupConditionNode": GlobalGroupConditionNode,
     "SmartGroupSwitchNode": SmartGroupSwitchNode,
-    "AdvancedGroupSwitchNode": AdvancedGroupSwitchNode
+    "AdvancedGroupSwitchNode": AdvancedGroupSwitchNode,
+    "FlowBypassGroupNode": FlowBypassGroupNode
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "GlobalGroupConditionNode": "全局组条件控制🌐🔀",
     "SmartGroupSwitchNode": "智能组开关🎯",
-    "AdvancedGroupSwitchNode": "高级组开关🔧"
+    "AdvancedGroupSwitchNode": "高级组开关🔧",
+    "FlowBypassGroupNode": "流程屏蔽组🚫"
 } 
