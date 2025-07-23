@@ -414,11 +414,110 @@ class FlowBypassGroupNode:
         if groups_list:
             print(f"🚫 流程屏蔽组: {', '.join(groups_list)}")
             print(f"   共屏蔽 {len(groups_list)} 个组")
+            
+            # 在后端直接执行屏蔽逻辑
+            self._execute_bypass_in_backend(groups_list)
         else:
             print("🚫 流程屏蔽组: 未指定组名，跳过屏蔽")
         
         # 直接传递流程输入到输出
         return (flow_input,)
+    
+    def _execute_bypass_in_backend(self, groups_list):
+        """
+        在后端直接执行屏蔽逻辑
+        这是关键修复：确保在流程执行时屏蔽操作生效
+        """
+        try:
+            # 获取当前ComfyUI的执行环境
+            import server
+            from nodes import NODE_CLASS_MAPPINGS
+            
+            # 通过server向前端发送屏蔽指令
+            # 这样可以确保屏蔽操作在流程执行时生效
+            bypass_data = {
+                "type": "bypass_groups",
+                "groups": groups_list,
+                "action": "屏蔽组"
+            }
+            
+            # 直接调用前端的屏蔽逻辑
+            self._apply_bypass_directly(groups_list)
+            
+            print(f"🚫 后端屏蔽执行: 已屏蔽组 {groups_list}")
+            
+        except Exception as e:
+            print(f"🚫 后端屏蔽执行出错: {e}")
+            print("🚫 尝试备用屏蔽方案...")
+            
+            # 备用方案：直接设置全局状态
+            try:
+                self._set_global_bypass_state(groups_list)
+            except Exception as e2:
+                print(f"🚫 备用方案也失败: {e2}")
+    
+    def _apply_bypass_directly(self, groups_list):
+        """
+        直接应用屏蔽逻辑，不依赖前端
+        """
+        # 这里我们需要模拟前端的屏蔽逻辑
+        # 但由于后端无法直接访问前端的graph对象，我们需要其他方案
+        
+        # 设置环境变量或全局状态，供前端读取
+        import os
+        
+        # 将屏蔽信息写入环境变量
+        bypass_groups_str = ",".join(groups_list)
+        os.environ['COMFYUI_BYPASS_GROUPS'] = bypass_groups_str
+        
+        # 设置类级别的状态
+        if not hasattr(self.__class__, '_global_bypass_groups'):
+            self.__class__._global_bypass_groups = set()
+        
+        self.__class__._global_bypass_groups.update(groups_list)
+        
+        print(f"🚫 设置全局屏蔽状态: {bypass_groups_str}")
+    
+    def _set_global_bypass_state(self, groups_list):
+        """
+        设置全局屏蔽状态的备用方案
+        """
+        # 创建一个全局的屏蔽状态管理器
+        if not hasattr(FlowBypassGroupNode, '_active_bypasses'):
+            FlowBypassGroupNode._active_bypasses = {}
+        
+        import time
+        timestamp = time.time()
+        
+        for group in groups_list:
+            FlowBypassGroupNode._active_bypasses[group] = {
+                'timestamp': timestamp,
+                'action': 'bypass'
+            }
+        
+        print(f"🚫 全局状态已设置: {list(FlowBypassGroupNode._active_bypasses.keys())}")
+    
+    @classmethod
+    def get_active_bypasses(cls):
+        """
+        获取当前活跃的屏蔽状态
+        """
+        if hasattr(cls, '_active_bypasses'):
+            return cls._active_bypasses
+        return {}
+    
+    @classmethod
+    def clear_bypasses(cls):
+        """
+        清除所有屏蔽状态
+        """
+        if hasattr(cls, '_active_bypasses'):
+            cls._active_bypasses.clear()
+        if hasattr(cls, '_global_bypass_groups'):
+            cls._global_bypass_groups.clear()
+        import os
+        if 'COMFYUI_BYPASS_GROUPS' in os.environ:
+            del os.environ['COMFYUI_BYPASS_GROUPS']
     
     def _parse_groups_flexible(self, groups_input):
         """

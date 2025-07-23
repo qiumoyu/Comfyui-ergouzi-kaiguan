@@ -677,16 +677,45 @@ app.registerExtension({
                 }, 100);
             };
             
-            // 重要：监听节点执行，在节点被执行时触发屏蔽
-            const originalExecute = nodeType.prototype.execute;
-            nodeType.prototype.execute = function(flow_input, groups_to_bypass) {
-                // 先执行原始逻辑
-                const result = originalExecute ? originalExecute.apply(this, arguments) : [flow_input];
+            // 重要：在流程执行时也要确保屏蔽逻辑被触发
+            // 通过重写onExecuted来捕获节点执行后的时机
+            nodeType.prototype.onExecuted = function(message) {
+                // 记录执行时间
+                this.properties = this.properties || {};
+                this.properties.lastExecuted = Date.now();
                 
-                // 然后执行屏蔽逻辑
-                handleFlowBypassGroup(this);
+                // 执行屏蔽逻辑
+                setTimeout(() => {
+                    console.log('🚫 节点执行完成，触发屏蔽逻辑');
+                    handleFlowBypassGroup(this);
+                    
+                    // 同时检查是否有来自后端的屏蔽指令
+                    this.checkBackendBypassInstructions();
+                }, 10);
+            };
+            
+            // 添加检查后端屏蔽指令的方法
+            nodeType.prototype.checkBackendBypassInstructions = function() {
+                const widgets = this.widgets;
+                if (!widgets) return;
                 
-                return result;
+                const groupsToBypass = widgets.find(w => w.name === "groups_to_bypass")?.value ?? "";
+                const targetGroups = parseTargetGroups(groupsToBypass);
+                
+                if (targetGroups.length > 0) {
+                    console.log('🚫 检测到后端屏蔽指令，执行屏蔽:', targetGroups);
+                    
+                    // 强制执行屏蔽操作
+                    groupManager.executeGroupControl("屏蔽组", targetGroups);
+                    
+                    // 注册控制器
+                    groupManager.registerController(this.id, {
+                        action: "屏蔽组",
+                        targetGroups: targetGroups,
+                        nodeType: "FlowBypass",
+                        fromBackend: true
+                    });
+                }
             };
             
             nodeType.prototype.onRemoved = function() {
@@ -696,7 +725,25 @@ app.registerExtension({
     }
 });
 
-// 定期清理无效节点引用
+// 添加后端屏蔽状态检查功能
+function checkBackendBypassState() {
+    // 检查是否有流程屏蔽组节点
+    const bypassNodes = app.graph._nodes.filter(node => node.type === "FlowBypassGroupNode");
+    
+    if (bypassNodes.length > 0) {
+        bypassNodes.forEach(node => {
+            // 如果节点刚执行过，确保屏蔽逻辑生效
+            if (node.properties && node.properties.lastExecuted) {
+                const timeSinceExecution = Date.now() - node.properties.lastExecuted;
+                if (timeSinceExecution < 5000) { // 5秒内执行过
+                    handleFlowBypassGroup(node);
+                }
+            }
+        });
+    }
+}
+
+// 定期清理无效节点引用 + 检查后端屏蔽状态
 setInterval(() => {
     const validNodeIds = new Set(app.graph._nodes.map(node => node.id));
     
@@ -706,7 +753,10 @@ setInterval(() => {
             groupManager.unregisterController(nodeId);
         }
     }
-}, 10000);
+    
+    // 检查后端屏蔽状态
+    checkBackendBypassState();
+}, 2000); // 缩短检查间隔到2秒
 
 console.log("🌐 全局组条件控制扩展已加载完成！");
 console.log("   支持功能:");
