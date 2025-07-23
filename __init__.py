@@ -18,9 +18,18 @@ def load_nodes():
                     NODE_CLASS_MAPPINGS.update(module.NODE_CLASS_MAPPINGS)
                 if hasattr(module, "NODE_DISPLAY_NAME_MAPPINGS"):
                     NODE_DISPLAY_NAME_MAPPINGS.update(module.NODE_DISPLAY_NAME_MAPPINGS)
+                    
+                # 特别输出全局条件控制节点的加载信息
+                if module_name == "kaiguan_global_condition":
+                    print("🌐 全局条件控制节点已成功加载！")
+                    print("   - 全局条件控制🌐🔀")
+                    print("   - 条件组控制🎯")
+                    
             except Exception as e:
                 print(f"Error loading module {module_name}: {e}")
 
 load_nodes()
 
-__all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]
+print(f"二狗子开关套件加载完成！共加载 {len(NODE_CLASS_MAPPINGS)} 个节点")
+
+__all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS", "WEB_DIRECTORY"]
