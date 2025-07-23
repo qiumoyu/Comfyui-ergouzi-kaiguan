@@ -188,7 +188,7 @@ class GlobalGroupConditionNode:
 class SmartGroupSwitchNode:
     """
     智能组开关节点：简化版的组控制节点
-    直接接受布尔输入来控制组开关
+    支持手动设置和动态接收组名来控制组开关
     """
     def __init__(self):
         pass
@@ -198,25 +198,26 @@ class SmartGroupSwitchNode:
         return {
             "required": {
                 "enable_group": ("BOOLEAN", {"default": True}),
-                "group_names": ("STRING", {"default": "", "multiline": True, "placeholder": "要控制的组名\n多个组用换行分隔\n留空=控制所有组"}),
                 "switch_mode": (["开启", "关闭", "屏蔽"], {"default": "开启"}),
+                "group_names": ("STRING", {"default": "", "multiline": True, "placeholder": "手动输入组名\n多个组用换行分隔\n留空=控制所有组"}),
             },
-            "optional": {},
+            "optional": {
+                "dynamic_group_names": (any_type, {"tooltip": "动态输入组名，支持字符串或列表格式"}),
+            },
         }
 
-    RETURN_TYPES = ("BOOLEAN", "STRING")
-    RETURN_NAMES = ("组状态", "操作结果")
+    RETURN_TYPES = ("BOOLEAN", "STRING", "STRING")
+    RETURN_NAMES = ("组状态", "操作结果", "受控组列表")
     FUNCTION = "execute"
     CATEGORY = "2🐕kaiguan"
 
-    def execute(self, enable_group, group_names, switch_mode):
-        # 解析组名
-        if group_names.strip():
-            groups = [g.strip() for g in group_names.split('\n') if g.strip()]
-            groups_desc = ", ".join(groups)
-        else:
-            groups = []
-            groups_desc = "所有组"
+    def execute(self, enable_group, switch_mode, group_names, dynamic_group_names=None):
+        
+        if not enable_group:
+            return (False, "节点已禁用", "无")
+        
+        # 解析组名：优先使用动态输入，其次使用手动输入
+        final_groups = self._parse_group_names(group_names, dynamic_group_names)
         
         # 根据模式确定操作
         action_map = {
@@ -226,19 +227,166 @@ class SmartGroupSwitchNode:
         }
         action = action_map[switch_mode]
         
+        # 生成组列表描述
+        if final_groups:
+            groups_desc = ", ".join(final_groups)
+            groups_list_desc = f"指定组: {groups_desc}"
+        else:
+            groups_desc = "所有组"
+            groups_list_desc = "所有组"
+        
         result = f"{action}: {groups_desc}"
         
         print(f"🎯 智能组开关: {result}")
+        print(f"   受控组详情: {groups_list_desc}")
         
-        return (enable_group, result)
+        return (enable_group, result, groups_list_desc)
+    
+    def _parse_group_names(self, manual_groups, dynamic_groups):
+        """解析组名，支持多种输入格式"""
+        
+        final_groups = []
+        
+        # 1. 优先处理动态输入的组名
+        if dynamic_groups is not None:
+            dynamic_parsed = self._parse_dynamic_input(dynamic_groups)
+            if dynamic_parsed:
+                final_groups.extend(dynamic_parsed)
+                print(f"🎯 使用动态组名: {dynamic_parsed}")
+        
+        # 2. 如果没有动态输入，使用手动输入
+        if not final_groups and manual_groups and manual_groups.strip():
+            manual_parsed = [g.strip() for g in manual_groups.split('\n') if g.strip()]
+            final_groups.extend(manual_parsed)
+            print(f"🎯 使用手动组名: {manual_parsed}")
+        
+        return final_groups
+    
+    def _parse_dynamic_input(self, dynamic_input):
+        """解析动态输入，支持多种格式"""
+        
+        if dynamic_input is None:
+            return []
+        
+        try:
+            # 1. 如果是列表格式
+            if isinstance(dynamic_input, (list, tuple)):
+                return [str(item).strip() for item in dynamic_input if str(item).strip()]
+            
+            # 2. 如果是字符串格式
+            elif isinstance(dynamic_input, str):
+                if dynamic_input.strip():
+                    # 支持多种分隔符：换行、逗号、分号
+                    if '\n' in dynamic_input:
+                        return [g.strip() for g in dynamic_input.split('\n') if g.strip()]
+                    elif ',' in dynamic_input:
+                        return [g.strip() for g in dynamic_input.split(',') if g.strip()]
+                    elif ';' in dynamic_input:
+                        return [g.strip() for g in dynamic_input.split(';') if g.strip()]
+                    else:
+                        return [dynamic_input.strip()]
+            
+            # 3. 其他类型转字符串处理
+            else:
+                str_input = str(dynamic_input).strip()
+                if str_input:
+                    return [str_input]
+        
+        except Exception as e:
+            print(f"🎯 动态组名解析错误: {e}")
+        
+        return []
+
+
+class AdvancedGroupSwitchNode:
+    """
+    高级组开关节点：支持更复杂的组控制逻辑
+    """
+    def __init__(self):
+        pass
+    
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "enable": ("BOOLEAN", {"default": True}),
+                "control_mode": (["单组控制", "多组控制", "全组控制"], {"default": "单组控制"}),
+            },
+            "optional": {
+                "group_name": ("STRING", {"default": "", "placeholder": "单个组名"}),
+                "group_list": (any_type, {"tooltip": "组名列表，支持字符串或列表格式"}),
+                "enable_action": (["启用", "禁用", "屏蔽"], {"default": "启用"}),
+                "disable_action": (["启用", "禁用", "屏蔽"], {"default": "禁用"}),
+                "apply_enable": ("BOOLEAN", {"default": True}),
+            },
+        }
+
+    RETURN_TYPES = ("STRING", "STRING", "BOOLEAN")
+    RETURN_NAMES = ("控制结果", "组列表", "执行状态")
+    FUNCTION = "execute"
+    CATEGORY = "2🐕kaiguan"
+
+    def execute(self, enable, control_mode, group_name="", group_list=None, 
+                enable_action="启用", disable_action="禁用", apply_enable=True):
+        
+        if not enable:
+            return ("节点已禁用", "无", False)
+        
+        # 根据控制模式确定目标组
+        target_groups = []
+        
+        if control_mode == "单组控制":
+            if group_name.strip():
+                target_groups = [group_name.strip()]
+        elif control_mode == "多组控制":
+            if group_list is not None:
+                target_groups = self._parse_group_list(group_list)
+        # 全组控制时 target_groups 保持空列表
+        
+        # 确定执行的动作
+        action = f"{enable_action}组" if apply_enable else f"{disable_action}组"
+        
+        # 生成结果描述
+        if target_groups:
+            groups_desc = ", ".join(target_groups)
+            result = f"{action}: {groups_desc}"
+        else:
+            groups_desc = "所有组"
+            result = f"{action}: 所有组"
+        
+        print(f"🔧 高级组开关: {result}")
+        
+        return (result, groups_desc, True)
+    
+    def _parse_group_list(self, group_list):
+        """解析组列表"""
+        if group_list is None:
+            return []
+        
+        try:
+            if isinstance(group_list, (list, tuple)):
+                return [str(item).strip() for item in group_list if str(item).strip()]
+            elif isinstance(group_list, str):
+                if ',' in group_list:
+                    return [g.strip() for g in group_list.split(',') if g.strip()]
+                elif '\n' in group_list:
+                    return [g.strip() for g in group_list.split('\n') if g.strip()]
+                else:
+                    return [group_list.strip()] if group_list.strip() else []
+        except:
+            pass
+        
+        return []
 
 
 NODE_CLASS_MAPPINGS = {
     "GlobalGroupConditionNode": GlobalGroupConditionNode,
-    "SmartGroupSwitchNode": SmartGroupSwitchNode
+    "SmartGroupSwitchNode": SmartGroupSwitchNode,
+    "AdvancedGroupSwitchNode": AdvancedGroupSwitchNode
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "GlobalGroupConditionNode": "全局组条件控制🌐🔀",
-    "SmartGroupSwitchNode": "智能组开关🎯"
+    "SmartGroupSwitchNode": "智能组开关🎯",
+    "AdvancedGroupSwitchNode": "高级组开关🔧"
 } 

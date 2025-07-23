@@ -218,6 +218,17 @@ function handleSmartGroupSwitch(node) {
         return;
     }
     
+    // 获取动态组名输入（如果有连接）
+    let dynamicGroupNames = null;
+    if (node.inputs && node.inputs.length > 0) {
+        // 查找dynamic_group_names输入
+        const dynamicInput = node.inputs.find(input => input.name === "dynamic_group_names");
+        if (dynamicInput && dynamicInput.link) {
+            // 这里可以获取连接的数据，但在前端我们主要关注控制逻辑
+            console.log('🎯 检测到动态组名输入连接');
+        }
+    }
+    
     // 模式映射
     const actionMap = {
         "开启": "启用组",
@@ -232,7 +243,60 @@ function handleSmartGroupSwitch(node) {
     groupManager.registerController(node.id, {
         action: action,
         targetGroups: targetGroups,
-        switchMode: switchMode
+        switchMode: switchMode,
+        hasDynamicInput: dynamicGroupNames !== null
+    });
+    
+    // 执行控制
+    groupManager.executeGroupControl(action, targetGroups);
+}
+
+// 处理高级组开关节点
+function handleAdvancedGroupSwitch(node) {
+    const widgets = node.widgets;
+    if (!widgets) return;
+    
+    const enable = widgets.find(w => w.name === "enable")?.value ?? true;
+    const controlMode = widgets.find(w => w.name === "control_mode")?.value ?? "单组控制";
+    const groupName = widgets.find(w => w.name === "group_name")?.value ?? "";
+    const enableAction = widgets.find(w => w.name === "enable_action")?.value ?? "启用";
+    const disableAction = widgets.find(w => w.name === "disable_action")?.value ?? "禁用";
+    const applyEnable = widgets.find(w => w.name === "apply_enable")?.value ?? true;
+    
+    if (!enable) {
+        console.log('🔧 高级组开关已禁用');
+        return;
+    }
+    
+    let targetGroups = [];
+    let action = "";
+    
+    // 根据控制模式确定目标组和动作
+    if (controlMode === "单组控制") {
+        if (groupName.trim()) {
+            targetGroups = [groupName.trim()];
+        }
+    } else if (controlMode === "多组控制") {
+        // 检查是否有group_list输入连接
+        if (node.inputs) {
+            const groupListInput = node.inputs.find(input => input.name === "group_list");
+            if (groupListInput && groupListInput.link) {
+                console.log('🔧 检测到组列表输入连接');
+                // 实际的组列表会在后端处理
+            }
+        }
+    }
+    // 全组控制时targetGroups保持空数组
+    
+    // 确定执行动作
+    action = applyEnable ? `${enableAction}组` : `${disableAction}组`;
+    
+    // 注册控制器
+    groupManager.registerController(node.id, {
+        action: action,
+        targetGroups: targetGroups,
+        controlMode: controlMode,
+        applyEnable: applyEnable
     });
     
     // 执行控制
@@ -400,7 +464,10 @@ let originalGetNodeMenuOptions = LGraphCanvas.prototype.getNodeMenuOptions;
 LGraphCanvas.prototype.getNodeMenuOptions = function(node) {
     const options = originalGetNodeMenuOptions.apply(this, arguments);
     
-    if (node.type === "GlobalGroupConditionNode" || node.type === "SmartGroupSwitchNode") {
+    if (node.type === "GlobalGroupConditionNode" || 
+        node.type === "SmartGroupSwitchNode" || 
+        node.type === "AdvancedGroupSwitchNode") {
+        
         options.push(null); // 分割线
         
         options.push({
@@ -415,6 +482,8 @@ LGraphCanvas.prototype.getNodeMenuOptions = function(node) {
                     handleGroupConditionControl(node);
                 } else if (node.type === "SmartGroupSwitchNode") {
                     handleSmartGroupSwitch(node);
+                } else if (node.type === "AdvancedGroupSwitchNode") {
+                    handleAdvancedGroupSwitch(node);
                 }
             }
         });
@@ -487,6 +556,30 @@ app.registerExtension({
                             
                             setTimeout(() => {
                                 handleSmartGroupSwitch(this);
+                            }, 50);
+                        };
+                    });
+                }, 100);
+            };
+            
+            nodeType.prototype.onRemoved = function() {
+                groupManager.unregisterController(this.id);
+            };
+        }
+        
+        // 高级组开关节点
+        if (nodeData.name === "AdvancedGroupSwitchNode") {
+            
+            nodeType.prototype.onNodeCreated = function() {
+                // 监听widget变化
+                setTimeout(() => {
+                    this.widgets?.forEach(widget => {
+                        const originalCallback = widget.callback;
+                        widget.callback = (value) => {
+                            if (originalCallback) originalCallback(value);
+                            
+                            setTimeout(() => {
+                                handleAdvancedGroupSwitch(this);
                             }, 50);
                         };
                     });
